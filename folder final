@@ -1,0 +1,10 @@
+skripsi-ai-assistant/
+│
+├── app.py
+├── requirements.txt
+├── README.md
+│
+├── data/
+│   └── contoh_data_skripsi.xlsx
+│
+└── .gitignore
