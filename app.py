@@ -163,14 +163,15 @@ Data penelitian terdahulu:
 """
 
         response = client.chat.completions.create(
-            model="llama3-70b-8192",
-            messages=[
-                {"role": "system", "content": "Kamu adalah dosen pembimbing skripsi berpengalaman."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.4,
-            max_tokens=1200
-        )
+    model="llama3-8b-8192",
+    messages=[
+        {"role": "system", "content": "Kamu adalah dosen pembimbing skripsi berpengalaman."},
+        {"role": "user", "content": prompt}
+    ],
+    temperature=0.4,
+    max_tokens=800
+)
+
 
         st.success("✅ Analisis selesai")
         st.markdown(response.choices[0].message.content)
