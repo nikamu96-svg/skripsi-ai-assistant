@@ -120,7 +120,7 @@ Gunakan bahasa Indonesia.
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": "Kamu adalah asisten akademik."},
                 {"role": "user", "content": prompt}
