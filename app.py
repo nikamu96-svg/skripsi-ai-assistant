@@ -16,32 +16,31 @@ st.title("🎓 AI Asisten Penentuan Judul Skripsi")
 st.write("Berbasis data skripsi terdahulu dan tren penelitian terkini")
 
 # ===============================
-# CEK API KEY GROQ (ANTI ERROR STREAMLIT)
+# CEK API KEY GROQ (FINAL & AMAN)
 # ===============================
 groq_api_key = None
 
-# Aman walau secrets tidak ada
+# 1. Coba ambil dari Streamlit Secrets (aman)
 try:
     groq_api_key = st.secrets.get("GROQ_API_KEY")
 except Exception:
     groq_api_key = None
 
-# Cek environment variable
+# 2. Coba Environment Variable
 if not groq_api_key:
     groq_api_key = os.getenv("GROQ_API_KEY")
 
-# Input manual jika belum ada
+# 3. Input manual jika belum ada
 if not groq_api_key:
-    st.warning("🔑 GROQ API Key belum tersedia")
+    st.warning("🔑 Silakan masukkan GROQ API Key untuk melanjutkan")
     groq_api_key = st.text_input(
-        "Masukkan GROQ API Key",
-        type="password",
-        help="API Key tidak disimpan"
+        "GROQ API Key",
+        type="password"
     )
     if not groq_api_key:
         st.stop()
 
-# Inisialisasi Groq
+# Inisialisasi client Groq
 client = Groq(api_key=groq_api_key)
 
 # ===============================
@@ -154,10 +153,10 @@ Tugas kamu:
 1. Menilai apakah topik "{keyword}" masih relevan dan layak diteliti
 2. Menilai tingkat kebaruan berdasarkan penelitian terdahulu
 3. Memberikan rekomendasi:
-   - Layak diteliti / Tidak layak
+   - Layak / Tidak layak
    - Alasan akademik
-   - Saran pengembangan judul agar lebih baru
-4. Gunakan bahasa akademik yang mudah dipahami mahasiswa
+   - Saran pengembangan judul
+4. Gunakan bahasa akademik yang mudah dipahami
 
 Data penelitian terdahulu:
 {context}
