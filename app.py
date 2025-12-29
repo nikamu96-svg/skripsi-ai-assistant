@@ -16,31 +16,32 @@ st.title("🎓 AI Asisten Penentuan Judul Skripsi")
 st.write("Berbasis data skripsi terdahulu dan tren penelitian terkini")
 
 # ===============================
-# CEK API KEY GROQ (AMAN & FLEKSIBEL)
+# CEK API KEY GROQ (ANTI ERROR STREAMLIT)
 # ===============================
 groq_api_key = None
 
-# 1. Streamlit Secrets (Cloud)
-if "GROQ_API_KEY" in st.secrets:
-    groq_api_key = st.secrets["GROQ_API_KEY"]
+# Aman walau secrets tidak ada
+try:
+    groq_api_key = st.secrets.get("GROQ_API_KEY")
+except Exception:
+    groq_api_key = None
 
-# 2. Environment Variable (Lokal)
-elif "GROQ_API_KEY" in os.environ:
-    groq_api_key = os.environ["GROQ_API_KEY"]
+# Cek environment variable
+if not groq_api_key:
+    groq_api_key = os.getenv("GROQ_API_KEY")
 
-# 3. Input Manual
-else:
-    st.warning("🔑 GROQ API Key belum ditemukan")
+# Input manual jika belum ada
+if not groq_api_key:
+    st.warning("🔑 GROQ API Key belum tersedia")
     groq_api_key = st.text_input(
         "Masukkan GROQ API Key",
         type="password",
-        help="API Key tidak akan disimpan"
+        help="API Key tidak disimpan"
     )
-
     if not groq_api_key:
         st.stop()
 
-# Inisialisasi client Groq
+# Inisialisasi Groq
 client = Groq(api_key=groq_api_key)
 
 # ===============================
@@ -76,7 +77,6 @@ required_columns = [
 ]
 
 missing_cols = [c for c in required_columns if c not in df.columns]
-
 if missing_cols:
     st.error(f"Kolom berikut tidak ditemukan: {missing_cols}")
     st.stop()
@@ -173,10 +173,8 @@ Data penelitian terdahulu:
             max_tokens=1200
         )
 
-        result = response.choices[0].message.content
-
         st.success("✅ Analisis selesai")
-        st.markdown(result)
+        st.markdown(response.choices[0].message.content)
 
 # ===============================
 # FOOTER
