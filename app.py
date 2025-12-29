@@ -1,182 +1,93 @@
 import streamlit as st
-st.error("🚨 INI APP BARU - JIKA MUNCUL, BERHASIL 🚨")
 import pandas as pd
 import os
 
-# =====================================================
-# KONFIGURASI HALAMAN
-# =====================================================
 st.set_page_config(
-    page_title="AI Asisten Penentuan Judul Skripsi",
+    page_title="AI Asisten Judul Skripsi",
     page_icon="🎓",
     layout="wide"
 )
 
-st.title("🎓 AI Asisten Penentuan Judul Skripsi")
-st.caption("Berbasis data skripsi terdahulu dan tren penelitian terkini")
+st.title("🎓 AI Asisten Judul Skripsi")
 
-# =====================================================
-# AMBIL API KEY (TANPA ERROR & TANPA STOP APP)
-# =====================================================
-groq_api_key = None
+# ===============================
+# STATUS & MODE
+# ===============================
+st.info("Mode stabil aktif")
 
-try:
-    if "GROQ_API_KEY" in st.secrets:
-        groq_api_key = st.secrets["GROQ_API_KEY"]
-except Exception:
-    pass
-
-if not groq_api_key:
-    groq_api_key = os.getenv("GROQ_API_KEY")
-
-client = None
-if groq_api_key:
-    try:
-        from groq import Groq
-        client = Groq(api_key=groq_api_key)
-    except Exception:
-        client = None
-
-# =====================================================
-# STATUS AI (INFORMASI SAJA, BUKAN ERROR)
-# =====================================================
-if client is None:
-    st.info("ℹ️ Mode demo aktif (AI nonaktif karena API key belum tersedia)")
-else:
-    st.success("🤖 AI aktif dan siap digunakan")
-
-# =====================================================
-# UPLOAD DATA
-# =====================================================
-st.header("📂 Upload Data Skripsi Terdahulu")
-
+# ===============================
+# LOAD DATA
+# ===============================
 uploaded_file = st.file_uploader(
-    "Upload file Excel (.xlsx)",
+    "Upload data skripsi (.xlsx)",
     type=["xlsx"]
 )
 
-if uploaded_file is None:
-    st.warning("Silakan upload file Excel untuk memulai")
+if not uploaded_file:
     st.stop()
 
-try:
-    df = pd.read_excel(uploaded_file)
-except Exception as e:
-    st.error(f"Gagal membaca file: {e}")
-    st.stop()
+df = pd.read_excel(uploaded_file)
 
-# =====================================================
-# VALIDASI KOLOM
-# =====================================================
-required_columns = [
-    "Judul", "Tahun", "Prodi",
-    "Variabel", "Metode",
-    "Objek", "Lokasi", "Kata_Kunci"
-]
+st.dataframe(df.head(), use_container_width=True)
 
-missing = [c for c in required_columns if c not in df.columns]
-if missing:
-    st.error(f"Kolom tidak ditemukan: {missing}")
-    st.stop()
+# ===============================
+# INPUT USER
+# ===============================
+topic = st.text_input(
+    "Masukkan topik penelitian",
+    placeholder="Contoh: e-procurement, UMKM, audit"
+)
 
-# =====================================================
-# FILTER
-# =====================================================
-st.header("🔍 Filter Penelitian")
+# ===============================
+# CEK API KEY (TANPA ERROR)
+# ===============================
+groq_api_key = (
+    st.secrets.get("GROQ_API_KEY")
+    if hasattr(st, "secrets")
+    else os.getenv("GROQ_API_KEY")
+)
 
-col1, col2 = st.columns(2)
+ai_ready = bool(groq_api_key)
 
-with col1:
-    prodi = st.multiselect(
-        "Program Studi",
-        options=sorted(df["Prodi"].dropna().unique())
-    )
-
-with col2:
-    keyword = st.text_input(
-        "Topik / Kata Kunci",
-        placeholder="Contoh: UMKM, e-procurement, digital marketing"
-    )
-
-filtered_df = df.copy()
-
-if prodi:
-    filtered_df = filtered_df[filtered_df["Prodi"].isin(prodi)]
-
-if keyword:
-    filtered_df = filtered_df[
-        filtered_df["Judul"].str.contains(keyword, case=False, na=False) |
-        filtered_df["Kata_Kunci"].str.contains(keyword, case=False, na=False)
-    ]
-
-# =====================================================
-# TAMPILKAN DATA
-# =====================================================
-st.subheader("📑 Hasil Penelitian")
-
-if filtered_df.empty:
-    st.warning("Tidak ada data yang sesuai")
+if ai_ready:
+    st.success("AI siap digunakan")
 else:
-    st.dataframe(filtered_df, use_container_width=True)
+    st.warning("AI nonaktif (API Key belum tersedia)")
 
-# =====================================================
-# ANALISIS AI (OPSIONAL)
-# =====================================================
-st.header("🤖 Analisis & Rekomendasi")
+# ===============================
+# PROSES AI
+# ===============================
+if st.button("Analisis Judul"):
 
-if st.button("Analisis Judul Skripsi"):
-
-    if client is None:
-        st.warning(
-            "AI tidak aktif karena API key belum tersedia.\n\n"
-            "Namun aplikasi tetap dapat digunakan untuk eksplorasi data."
-        )
+    if not ai_ready:
+        st.warning("AI tidak aktif. Tambahkan GROQ_API_KEY untuk mengaktifkan.")
         st.stop()
 
-    if filtered_df.empty:
-        st.warning("Tidak ada data untuk dianalisis")
-        st.stop()
+    from groq import Groq
+    client = Groq(api_key=groq_api_key)
 
-    with st.spinner("AI sedang menganalisis..."):
+    context = "\n".join(
+        df["Judul"].astype(str).head(5).tolist()
+    )
 
-        context = ""
-        for _, row in filtered_df.head(8).iterrows():
-            context += f"""
-Judul: {row['Judul']}
-Tahun: {row['Tahun']}
-Variabel: {row['Variabel']}
-Metode: {row['Metode']}
----
-"""
-
-        prompt = f"""
+    prompt = f"""
 Anda adalah dosen pembimbing skripsi.
-
-Berdasarkan data penelitian terdahulu berikut:
+Berdasarkan judul berikut:
 {context}
 
-Jawablah:
-1. Apakah topik "{keyword}" masih relevan?
-2. Apakah ada peluang kebaruan?
-3. Berikan 3 rekomendasi judul skripsi beserta variabel dan metode.
+Buatkan 3 judul skripsi baru untuk topik:
+{topic}
 """
 
-        try:
-            response = client.responses.create(
-                model="llama3-8b-8192",
-                input=prompt,
-                temperature=0.4,
-                max_output_tokens=600
-            )
+    try:
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400
+        )
 
-            st.success("✅ Analisis selesai")
-            st.markdown(response.output_text)
+        st.success("Hasil AI")
+        st.markdown(response.choices[0].message.content)
 
-        except Exception as e:
-            st.error("Terjadi kesalahan saat memanggil AI")
-
-# =====================================================
-# FOOTER
-# =====================================================
-st.markdown("---")
-st.caption("Aplikasi pendukung penentuan judul skripsi berbasis data & AI")
+    except Exception as e:
+        st.error("AI gagal merespons. Periksa API key / quota.")
