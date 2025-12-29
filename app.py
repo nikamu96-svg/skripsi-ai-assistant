@@ -1,183 +1,145 @@
 import streamlit as st
 import pandas as pd
-import os
 from groq import Groq
 
-# ===============================
+# =========================
 # KONFIGURASI HALAMAN
-# ===============================
+# =========================
 st.set_page_config(
     page_title="AI Asisten Penentuan Judul Skripsi",
     page_icon="🎓",
     layout="wide"
 )
 
+# =========================
+# VALIDASI API KEY (TANPA UI INPUT)
+# =========================
+if "GROQ_API_KEY" not in st.secrets:
+    st.error("❌ GROQ_API_KEY belum diatur di Streamlit Secrets")
+    st.stop()
+
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+
+# =========================
+# HEADER
+# =========================
 st.title("🎓 AI Asisten Penentuan Judul Skripsi")
-st.write("Berbasis data skripsi terdahulu dan tren penelitian terkini")
+st.caption("Berbasis skripsi terdahulu dan tren penelitian terkini")
 
-# ===============================
-# CEK API KEY GROQ (FINAL & AMAN)
-# ===============================
-groq_api_key = None
+# =========================
+# LOAD DATA
+# =========================
+@st.cache_data
+def load_data():
+    return pd.read_csv("data_skripsi.csv")
 
-# 1. Coba ambil dari Streamlit Secrets (aman)
 try:
-    groq_api_key = st.secrets.get("GROQ_API_KEY")
-except Exception:
-    groq_api_key = None
-
-# 2. Coba Environment Variable
-if not groq_api_key:
-    groq_api_key = os.getenv("GROQ_API_KEY")
-
-# 3. Input manual jika belum ada
-if not groq_api_key:
-    st.warning("🔑 Silakan masukkan GROQ API Key untuk melanjutkan")
-    groq_api_key = st.text_input(
-        "GROQ API Key",
-        type="password"
-    )
-    if not groq_api_key:
-        st.stop()
-
-# Inisialisasi client Groq
-client = Groq(api_key=groq_api_key)
-
-# ===============================
-# UPLOAD DATA EXCEL
-# ===============================
-st.header("📂 Upload Data Skripsi Terdahulu")
-
-uploaded_file = st.file_uploader(
-    "Upload file Excel (.xlsx)",
-    type=["xlsx"]
-)
-
-if uploaded_file is None:
-    st.info("Silakan upload data skripsi terlebih dahulu")
-    st.stop()
-
-# ===============================
-# BACA DATA
-# ===============================
-try:
-    df = pd.read_excel(uploaded_file)
+    df = load_data()
 except Exception as e:
-    st.error(f"Gagal membaca file Excel: {e}")
+    st.error("❌ Gagal memuat data_skripsi.csv")
     st.stop()
 
-# ===============================
-# VALIDASI KOLOM
-# ===============================
-required_columns = [
-    "Judul", "Tahun", "Prodi",
-    "Variabel", "Metode",
-    "Objek", "Lokasi", "Kata_Kunci"
-]
+# =========================
+# FILTER SIDEBAR
+# =========================
+with st.sidebar:
+    st.header("🔍 Filter Penelitian")
 
-missing_cols = [c for c in required_columns if c not in df.columns]
-if missing_cols:
-    st.error(f"Kolom berikut tidak ditemukan: {missing_cols}")
-    st.stop()
-
-# ===============================
-# FILTER INPUT USER
-# ===============================
-st.header("🔍 Pencarian Penelitian")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    selected_prodi = st.multiselect(
-        "Pilih Program Studi",
+    prodi = st.multiselect(
+        "Program Studi",
         options=sorted(df["Prodi"].dropna().unique())
     )
 
-with col2:
-    keyword = st.text_input(
-        "Masukkan topik / kata kunci penelitian",
-        placeholder="Contoh: UMKM, e-procurement, digital marketing"
+    metode = st.multiselect(
+        "Metode Penelitian",
+        options=sorted(df["Metode"].dropna().unique())
     )
 
-# ===============================
+# =========================
 # FILTER DATA
-# ===============================
+# =========================
 filtered_df = df.copy()
 
-if selected_prodi:
-    filtered_df = filtered_df[filtered_df["Prodi"].isin(selected_prodi)]
+if prodi:
+    filtered_df = filtered_df[filtered_df["Prodi"].isin(prodi)]
 
-if keyword:
-    filtered_df = filtered_df[
-        filtered_df["Judul"].str.contains(keyword, case=False, na=False) |
-        filtered_df["Kata_Kunci"].str.contains(keyword, case=False, na=False)
-    ]
+if metode:
+    filtered_df = filtered_df[filtered_df["Metode"].isin(metode)]
 
-# ===============================
+# =========================
 # TAMPILKAN DATA
-# ===============================
-st.subheader("📑 Hasil Penelitian Terdahulu")
-
-if filtered_df.empty:
-    st.warning("Tidak ditemukan penelitian yang sesuai")
-    st.stop()
-
+# =========================
+st.subheader("📚 Data Skripsi Terdahulu")
 st.dataframe(filtered_df, use_container_width=True)
 
-# ===============================
-# ANALISIS AI
-# ===============================
-st.header("🤖 Analisis & Rekomendasi AI")
+# =========================
+# INPUT PERTANYAAN
+# =========================
+st.subheader("✍️ Konsultasi Judul Skripsi")
 
-if st.button("Analisis Kelayakan Penelitian"):
-    with st.spinner("AI sedang menganalisis..."):
+user_question = st.text_area(
+    "Masukkan topik atau minat penelitian Anda:",
+    height=120,
+    placeholder="Contoh: pengaruh digitalisasi terhadap kinerja keuangan UMKM"
+)
 
-        context = ""
-        for _, row in filtered_df.iterrows():
-            context += f"""
+# =========================
+# PROSES AI
+# =========================
+if st.button("🚀 Analisis & Rekomendasi Judul"):
+
+    if user_question.strip() == "":
+        st.warning("⚠️ Pertanyaan tidak boleh kosong")
+        st.stop()
+
+    if filtered_df.empty:
+        st.warning("⚠️ Data kosong setelah filter")
+        st.stop()
+
+    # =========================
+    # BATASI CONTEXT (AMAN TOKEN)
+    # =========================
+    context = ""
+    for _, row in filtered_df.head(10).iterrows():
+        context += f"""
 Judul: {row['Judul']}
 Tahun: {row['Tahun']}
-Prodi: {row['Prodi']}
 Variabel: {row['Variabel']}
 Metode: {row['Metode']}
-Objek: {row['Objek']}
-Lokasi: {row['Lokasi']}
-Kata Kunci: {row['Kata_Kunci']}
 ---
 """
 
-        prompt = f"""
-Kamu adalah AI akademik yang membantu mahasiswa menentukan judul skripsi.
+    prompt = f"""
+Anda adalah dosen pembimbing skripsi yang berpengalaman.
 
-Tugas kamu:
-1. Menilai apakah topik "{keyword}" masih relevan dan layak diteliti
-2. Menilai tingkat kebaruan berdasarkan penelitian terdahulu
-3. Memberikan rekomendasi:
-   - Layak / Tidak layak
-   - Alasan akademik
-   - Saran pengembangan judul
-4. Gunakan bahasa akademik yang mudah dipahami
-
-Data penelitian terdahulu:
+Gunakan referensi skripsi berikut sebagai bahan pertimbangan:
 {context}
+
+Tugas Anda:
+1. Memberikan 3 rekomendasi judul skripsi
+2. Setiap judul disertai variabel, metode, dan objek penelitian
+3. Judul harus relevan, akademik, dan layak diteliti
+
+Pertanyaan mahasiswa:
+{user_question}
 """
 
-        response = client.chat.completions.create(
-    model="llama3-8b-8192",
-    messages=[
-        {"role": "system", "content": "Kamu adalah dosen pembimbing skripsi berpengalaman."},
-        {"role": "user", "content": prompt}
-    ],
-    temperature=0.4,
-    max_tokens=800
-)
+    # =========================
+    # PANGGIL GROQ (ENDPOINT BARU)
+    # =========================
+    try:
+        response = client.responses.create(
+            model="llama3-8b-8192",
+            input=prompt,
+            temperature=0.4,
+            max_output_tokens=600
+        )
 
+        result = response.output_text
 
-        st.success("✅ Analisis selesai")
-        st.markdown(response.choices[0].message.content)
+        st.success("✅ Rekomendasi Berhasil Dibuat")
+        st.markdown(result)
 
-# ===============================
-# FOOTER
-# ===============================
-st.markdown("---")
-st.caption("Dikembangkan untuk membantu mahasiswa menentukan judul skripsi secara efisien dan akademis")
+    except Exception as e:
+        st.error("❌ Terjadi kesalahan saat memanggil AI")
+        st.stop()
