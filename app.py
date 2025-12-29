@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import os
+from groq import Groq
 
-# ===============================
+# =====================================================
 # KONFIGURASI HALAMAN
-# ===============================
+# =====================================================
 st.set_page_config(
     page_title="AI Asisten Judul Skripsi",
     page_icon="🎓",
@@ -12,90 +13,89 @@ st.set_page_config(
 )
 
 st.title("🎓 AI Asisten Judul Skripsi")
-st.caption("Berbasis data skripsi terdahulu dan AI Groq")
+st.caption("Menggunakan AI Groq (LLaMA 3)")
 
-# ===============================
-# STATUS APLIKASI
-# ===============================
-st.info("Mode stabil aktif")
+# =====================================================
+# AMBIL GROQ API KEY (PALING AMAN)
+# =====================================================
+groq_api_key = None
 
-# ===============================
-# LOAD DATA EXCEL
-# ===============================
+# 1. Coba dari Streamlit Secrets (Cloud)
+if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+
+# 2. Jika tidak ada, coba dari Environment Variable (Local)
+if not groq_api_key:
+    groq_api_key = os.getenv("GROQ_API_KEY")
+
+# =====================================================
+# STATUS AI
+# =====================================================
+if not groq_api_key:
+    st.error("❌ AI NONAKTIF — GROQ_API_KEY tidak ditemukan")
+    st.info(
+        "Tambahkan API Key di:\n"
+        "- Streamlit Cloud → Settings → Secrets\n"
+        "- atau set Environment Variable (local)"
+    )
+    st.stop()
+else:
+    st.success("✅ AI AKTIF — GROQ_API_KEY terdeteksi")
+
+# =====================================================
+# INISIALISASI CLIENT GROQ
+# =====================================================
+try:
+    client = Groq(api_key=groq_api_key)
+except Exception as e:
+    st.error("Gagal menginisialisasi Groq Client")
+    st.code(str(e))
+    st.stop()
+
+# =====================================================
+# UPLOAD DATA EXCEL
+# =====================================================
 uploaded_file = st.file_uploader(
     "Upload data skripsi (.xlsx)",
     type=["xlsx"]
 )
 
-if uploaded_file is None:
+if not uploaded_file:
     st.warning("Silakan upload file Excel untuk memulai")
     st.stop()
 
 try:
     df = pd.read_excel(uploaded_file)
 except Exception:
-    st.error("File Excel tidak dapat dibaca. Pastikan format .xlsx benar.")
+    st.error("File Excel tidak valid / rusak")
     st.stop()
 
 if df.empty:
-    st.error("Data Excel kosong.")
+    st.error("Data Excel kosong")
     st.stop()
 
-st.success("Data berhasil dimuat")
+if "Judul" not in df.columns:
+    st.error("Kolom 'Judul' tidak ditemukan di file Excel")
+    st.stop()
+
+st.success("📊 Data berhasil dimuat")
 st.dataframe(df.head(), use_container_width=True)
 
-# ===============================
+# =====================================================
 # INPUT TOPIK
-# ===============================
+# =====================================================
 topic = st.text_input(
     "Masukkan topik penelitian",
-    placeholder="Contoh: e-procurement, UMKM, audit"
+    placeholder="Contoh: UMKM, e-procurement, audit"
 )
 
 if not topic:
-    st.warning("Masukkan topik penelitian terlebih dahulu")
     st.stop()
 
-# ===============================
-# CEK API KEY GROQ (AMAN)
-# ===============================
-groq_api_key = (
-    st.secrets.get("GROQ_API_KEY")
-    if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets
-    else os.getenv("GROQ_API_KEY")
-)
-
-ai_ready = bool(groq_api_key)
-
-if ai_ready:
-    st.success("AI AKTIF (Groq API terdeteksi)")
-else:
-    st.warning("AI nonaktif (GROQ_API_KEY belum tersedia)")
-
-# ===============================
-# TOMBOL ANALISIS
-# ===============================
+# =====================================================
+# PROSES AI
+# =====================================================
 if st.button("🔍 Analisis Judul"):
-
-    if not ai_ready:
-        st.error("AI tidak aktif. Tambahkan GROQ_API_KEY di Secrets / .env")
-        st.stop()
-
-    # Import di dalam button agar lebih aman
-    from groq import Groq
-
-    try:
-        client = Groq(api_key=groq_api_key)
-    except Exception:
-        st.error("Gagal menginisialisasi Groq client")
-        st.stop()
-
-    # ===============================
-    # KONTEKS DATA
-    # ===============================
-    if "Judul" not in df.columns:
-        st.error("Kolom 'Judul' tidak ditemukan di Excel")
-        st.stop()
 
     context = "\n".join(
         df["Judul"]
@@ -111,16 +111,13 @@ Anda adalah dosen pembimbing skripsi.
 Berikut contoh judul skripsi terdahulu:
 {context}
 
-Buatkan 3 judul skripsi BARU, akademik, dan relevan
-dengan topik:
+Buatkan 3 judul skripsi BARU, akademik,
+dan relevan dengan topik:
 {topic}
 
-Formatkan dalam bentuk daftar bernomor.
+Gunakan bahasa Indonesia.
 """
 
-    # ===============================
-    # PANGGIL AI GROQ
-    # ===============================
     try:
         response = client.chat.completions.create(
             model="llama3-8b-8192",
@@ -132,9 +129,9 @@ Formatkan dalam bentuk daftar bernomor.
             max_tokens=400
         )
 
-        st.success("✅ Rekomendasi Judul dari AI")
+        st.success("🎯 Rekomendasi Judul Skripsi")
         st.markdown(response.choices[0].message.content)
 
     except Exception as e:
-        st.error("AI gagal merespons.")
+        st.error("AI gagal merespons")
         st.code(str(e))
