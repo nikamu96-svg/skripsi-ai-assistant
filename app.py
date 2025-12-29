@@ -1,4 +1,5 @@
 import streamlit as st
+st.error("🚨 INI APP BARU - JIKA MUNCUL, BERHASIL 🚨")
 import pandas as pd
 import os
 
