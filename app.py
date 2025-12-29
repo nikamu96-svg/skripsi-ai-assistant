@@ -16,18 +16,38 @@ st.title("🎓 AI Asisten Penentuan Judul Skripsi")
 st.write("Berbasis data skripsi terdahulu dan tren penelitian terkini")
 
 # ===============================
-# CEK API KEY GROQ
+# CEK API KEY GROQ (AMAN & FLEKSIBEL)
 # ===============================
-if "GROQ_API_KEY" not in os.environ:
-    st.error("❌ GROQ_API_KEY belum diatur di Streamlit Secrets")
-    st.stop()
+groq_api_key = None
 
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
+# 1. Streamlit Secrets (Cloud)
+if "GROQ_API_KEY" in st.secrets:
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+
+# 2. Environment Variable (Lokal)
+elif "GROQ_API_KEY" in os.environ:
+    groq_api_key = os.environ["GROQ_API_KEY"]
+
+# 3. Input Manual
+else:
+    st.warning("🔑 GROQ API Key belum ditemukan")
+    groq_api_key = st.text_input(
+        "Masukkan GROQ API Key",
+        type="password",
+        help="API Key tidak akan disimpan"
+    )
+
+    if not groq_api_key:
+        st.stop()
+
+# Inisialisasi client Groq
+client = Groq(api_key=groq_api_key)
 
 # ===============================
 # UPLOAD DATA EXCEL
 # ===============================
 st.header("📂 Upload Data Skripsi Terdahulu")
+
 uploaded_file = st.file_uploader(
     "Upload file Excel (.xlsx)",
     type=["xlsx"]
@@ -56,6 +76,7 @@ required_columns = [
 ]
 
 missing_cols = [c for c in required_columns if c not in df.columns]
+
 if missing_cols:
     st.error(f"Kolom berikut tidak ditemukan: {missing_cols}")
     st.stop()
@@ -70,7 +91,7 @@ col1, col2 = st.columns(2)
 with col1:
     selected_prodi = st.multiselect(
         "Pilih Program Studi",
-        options=sorted(df["Prodi"].unique())
+        options=sorted(df["Prodi"].dropna().unique())
     )
 
 with col2:
@@ -153,6 +174,7 @@ Data penelitian terdahulu:
         )
 
         result = response.choices[0].message.content
+
         st.success("✅ Analisis selesai")
         st.markdown(result)
 
